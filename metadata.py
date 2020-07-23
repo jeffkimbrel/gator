@@ -12,6 +12,9 @@ class Metadata:
         self.db_info = pd.read_excel(metadata_file_path, sheet_namestr="db")
         self.gene_info = pd.read_excel(metadata_file_path, sheet_name="gene")
 
+    def __str__(self):
+        return "<GATOR Metadata Class>"
+
     def remove_temp_files(self):
         for id, db in self.db_info.iterrows():
             os.remove(db['hal_path'])
