@@ -5,12 +5,21 @@ import uuid
 import pandas as pd
 import numpy as np
 from jakomics import colors
+import pathway
 
 
 class Metadata:
     def __init__(self, metadata_file_path):
-        self.db_info = pd.read_excel(metadata_file_path, sheet_namestr="db")
+        self.db_info = pd.read_excel(metadata_file_path, sheet_name="db")
         self.gene_info = pd.read_excel(metadata_file_path, sheet_name="gene")
+        self.pathway_info = pd.read_excel(metadata_file_path, sheet_name="pathway")
+
+        # remove empty rows
+        self.db_info.dropna(subset=["DB_NAME"], inplace=True)
+        self.gene_info.dropna(subset=["GENE_NAME"], inplace=True)
+        self.pathway_info.dropna(subset=["PATHWAY_NAME"], inplace=True)
+
+        self.parse_paths()
 
     def __str__(self):
         return "<GATOR Metadata Class>"
@@ -18,6 +27,11 @@ class Metadata:
     def remove_temp_files(self):
         for id, db in self.db_info.iterrows():
             os.remove(db['hal_path'])
+
+    def parse_paths(self):
+        self.pathways = []
+        for id, path in self.pathway_info.iterrows():
+            self.pathways.append(pathway.Pathway(path))
 
     def create_hal_files(self):
         '''

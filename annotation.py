@@ -11,4 +11,4 @@ class Annotation:
         self.db_hits = {}
 
     def __str__(self):
-        return "<GATOR Annotation Class>"
+        return f"<GATOR Annotation Class> {self.gene}"
