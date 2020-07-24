@@ -8,7 +8,7 @@ import metadata
 import annotation
 from jakomics import utilities, kegg, colors
 
-version = "v0.3.0"
+version = "v0.4.0"
 
 print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version} (Under active development!!){colors.bcolors.END}')
 
@@ -34,7 +34,7 @@ annotated_genomes = manager.list()
 
 # prep metadata and databases
 gator_path = (os.path.dirname(os.path.abspath(sys.argv[0])))
-metadata = metadata.Metadata(os.path.join(gator_path, "gator.xlsx"))
+metadata = metadata.Metadata(os.path.join(gator_path, "gator_db.xlsx"))
 metadata.create_hal_files()
 
 # get genomes
@@ -61,27 +61,28 @@ def annotate(genome):
 
     for gene_index, gene in metadata.gene_info.iterrows():
         for db_index, db in metadata.db_info.iterrows():
-            term_list = [x.strip() for x in gene[db['DB_NAME']].split(',')]
-            for term in term_list:
-                if term in genome.raw_results[db['DB_NAME']]:
-                    for hit in genome.raw_results[db['DB_NAME']][term]:
-                        r = hit.result()
+            if pd.notnull(gene[db['DB_NAME']]):
+                term_list = [x.strip() for x in gene[db['DB_NAME']].split(',')]
+                for term in term_list:
+                    if term in genome.raw_results[db['DB_NAME']]:
+                        for hit in genome.raw_results[db['DB_NAME']][term]:
+                            r = hit.result()
 
-                        details = details.append(
-                            pd.Series(data={'GENOME': genome.short_name,
-                                            'GENE': gene['GENE_NAME'],
-                                            'PRODUCT': gene['GENE_PRODUCT'],
-                                            'TYPE': db['DB_NAME'],
-                                            'ID': r['annotation'],
-                                            'LOCUS_TAG': r['gene'],
-                                            'SCORE': r['score'],
-                                            'EVAL': r['evalue'],
-                                            'NOTE': gene['GENE_NOTE'],
-                                            'COMPLEX': gene['COMPLEX'],
-                                            'REACTION': gene['REACTION']
-                                            }
-                                      ),
-                            ignore_index=True)
+                            details = details.append(
+                                pd.Series(data={'GENOME': genome.short_name,
+                                                'GENE': gene['GENE_NAME'],
+                                                'PRODUCT': gene['GENE_PRODUCT'],
+                                                'TYPE': db['DB_NAME'],
+                                                'ID': r['annotation'],
+                                                'LOCUS_TAG': r['gene'],
+                                                'SCORE': r['score'],
+                                                'EVAL': r['evalue'],
+                                                'NOTE': gene['GENE_NOTE'],
+                                                'COMPLEX': gene['COMPLEX'],
+                                                'REACTION': gene['REACTION']
+                                                }
+                                          ),
+                                ignore_index=True)
     genome.annotations = details
     annotated_genomes.append(genome)
 
@@ -93,6 +94,20 @@ pool.close()
 
 # cleanup
 metadata.remove_temp_files()
+
+detail_results = pd.DataFrame(columns=[
+    'GENOME',
+    'GENE',
+    'PRODUCT',
+    'TYPE',
+    'ID',
+    'LOCUS_TAG',
+    'SCORE',
+    'EVAL',
+    'NOTE',
+    'COMPLEX',
+    'REACTION'])
+
 
 pathway_results = pd.DataFrame(columns=[
     'GENOME',
@@ -106,6 +121,8 @@ pathway_results = pd.DataFrame(columns=[
 
 for genome in annotated_genomes:
 
+    detail_results = detail_results.append(genome.annotations, ignore_index=True)
+
     genes = list(set(genome.annotations['GENE']))
 
     for p in metadata.pathways:
@@ -113,3 +130,4 @@ for genome in annotated_genomes:
         pathway_results = pathway_results.append(results, ignore_index=True)
 
 pathway_results.to_csv("pathway_results.txt", sep="\t", index=False)
+detail_results.to_csv("detail_results.txt", sep="\t", index=False)

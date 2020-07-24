@@ -6,8 +6,13 @@ class Pathway:
     def __init__(self, pandas_raw):
         self.name = pandas_raw['PATHWAY_NAME']
         self.definition = pandas_raw['DEFINITION']
-        self.compounds = [x.strip() for x in pandas_raw['COMPOUNDS'].split('->')]
+
         self.steps = self.parse_definition()
+
+        if pd.notnull(pandas_raw['COMPOUNDS']):
+            self.compounds = [x.strip() for x in pandas_raw['COMPOUNDS'].split('->')]
+        else:
+            self.compounds = []
 
     def __str__(self):
         return f"<GATOR Pathway Class> {self.name}"
@@ -47,13 +52,14 @@ class Pathway:
 
         # make fancy compound string
         reaction_string = ""
-        for i, step in enumerate(steps_present):
-            if step:
-                arrow = " ---> "
-            else:
-                arrow = " -x-> "
-            reaction_string += self.compounds[i] + arrow
-        reaction_string += self.compounds[-1]
+        if len(self.compounds) > 0:
+            for i, step in enumerate(steps_present):
+                if step:
+                    arrow = " ---> "
+                else:
+                    arrow = " -X-> "
+                reaction_string += self.compounds[i] + arrow
+            reaction_string += self.compounds[-1]
 
         # score entire pathway present or absent
         if steps == steps_count:

@@ -3,3 +3,5 @@
 test_data/*
 *.pyc
 pathway_results.txt
+detail_results.txt
+~$gator.xlsx

@@ -54,15 +54,16 @@ class Metadata:
 
                 # the ko_raw_list to ko_list deals with comma-separated list of KOs in one cell
                 for ko_raw_list in self.gene_info[db['DB_NAME']]:
-                    ko_list = [x.strip() for x in ko_raw_list.split(',')]
-                    for ko in ko_list:
-                        hmm_path = os.path.join(db['DB_PATH'], ko + ".hmm")
-                        if os.path.exists(hmm_path):
-                            hal_target.write(hmm_path + "\n")
-                        else:
-                            found_problem = True
-                            print(
-                                f'WARNING: {colors.bcolors.RED}{ko}.hmm{colors.bcolors.END} is not found at {db["DB_PATH"]}')
+                    if pd.notnull(ko_raw_list):
+                        ko_list = [x.strip() for x in ko_raw_list.split(',')]
+                        for ko in ko_list:
+                            hmm_path = os.path.join(db['DB_PATH'], ko + ".hmm")
+                            if os.path.exists(hmm_path):
+                                hal_target.write(hmm_path + "\n")
+                            else:
+                                found_problem = True
+                                print(
+                                    f'WARNING: {colors.bcolors.RED}{ko}.hmm{colors.bcolors.END} is not found at {db["DB_PATH"]}')
 
                 hal_target.close()
 
