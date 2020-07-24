@@ -6,9 +6,9 @@ from multiprocessing import Pool, Manager
 
 import metadata
 import annotation
-from jakomics import utilities, kegg, colors
+from jakomics import utilities, kegg, colors, blast
 
-version = "v0.4.0"
+version = "v0.5.0"
 
 print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version} (Under active development!!){colors.bcolors.END}')
 
@@ -53,12 +53,25 @@ def annotate(genome):
 
         # kofam method
         if db['METHOD'] == 'kofam':
+            print("Running kofam search")
             hits = kegg.run_kofam(genome.file_path, db['hal_path'])
             genome.raw_results[db['DB_NAME']] = kegg.parse_kofam_hits(hits)
 
+        if db['METHOD'] == 'blastp':
+            print("Running blastp search")
+            # blast.make_blast_db(type="prot", db=db['DB_PATH'])
+            genome.raw_results[db['DB_NAME']] = blast.run_blast(type="prot",
+                                                                q=genome.file_path,
+                                                                db=db['DB_PATH'],
+                                                                e=1e-15,
+                                                                make=False,
+                                                                return_query_results=False)
+
+    # Get Results
     details = pd.DataFrame(columns=['GENOME', 'GENE', 'PRODUCT', 'TYPE', 'ID',
                                     'LOCUS_TAG', 'SCORE', 'EVAL', 'NOTE', 'COMPLEX', "REACTION"])
 
+    # the result method needs to return the same data regardless of class
     for gene_index, gene in metadata.gene_info.iterrows():
         for db_index, db in metadata.db_info.iterrows():
             if pd.notnull(gene[db['DB_NAME']]):

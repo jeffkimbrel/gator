@@ -26,7 +26,8 @@ class Metadata:
 
     def remove_temp_files(self):
         for id, db in self.db_info.iterrows():
-            os.remove(db['hal_path'])
+            if pd.notnull(db['hal_path']):
+                os.remove(db['hal_path'])
 
     def parse_paths(self):
         self.pathways = []
@@ -41,7 +42,7 @@ class Metadata:
 
         print(f'Making .hal files')
 
-        self.db_info['hal_path'] = ""
+        self.db_info['hal_path'] = None
 
         for id, db in self.db_info.iterrows():
 

@@ -5,3 +5,8 @@ test_data/*
 pathway_results.txt
 detail_results.txt
 ~$gator.xlsx
+db/gator.faa
+db/gator.faa.phr
+db/gator.faa.pin
+db/gator.faa.psq
+~$gator_db.xlsx
