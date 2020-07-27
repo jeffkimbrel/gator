@@ -6,11 +6,11 @@ from multiprocessing import Pool, Manager
 
 import metadata
 import annotation
-from jakomics import utilities, kegg, colors, blast
+from jakomics import utilities, kegg, colors, blast, hmm
 
-version = "v0.6.0"
+version = "v0.6.1"
 
-print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version} (Under active development!!){colors.bcolors.END}')
+print(f'{colors.bcolors.CYAN}Genome annotATOR (GATOR) {version} (Under active development!!){colors.bcolors.END}')
 
 # OPTIONS #####################################################################
 
@@ -31,6 +31,8 @@ args = parser.parse_args()
 
 manager = Manager()
 annotated_genomes = manager.list()
+completed_runs = manager.dict()
+run_warnings = manager.list()
 
 # prep metadata and databases
 gator_path = (os.path.dirname(os.path.abspath(sys.argv[0])))
@@ -44,7 +46,7 @@ unannotated_genomes = utilities.get_files(args.files, args.in_dir, ["faa"])
 
 
 def annotate(genome):
-    global annotated_genomes
+    global annotated_genomes, completed_runs, run_warnings
 
     # run genome against databases. each method type will need its own logic
     genome.raw_results = {}
@@ -53,12 +55,12 @@ def annotate(genome):
 
         # kofam method
         if db['METHOD'] == 'kofam':
-            print("Running kofam search")
+            # print("Running kofam search")
             hits = kegg.run_kofam(genome.file_path, db['hal_path'])
             genome.raw_results[db['DB_NAME']] = kegg.parse_kofam_hits(hits)
 
-        if db['METHOD'] == 'blastp':
-            print("Running blastp search")
+        elif db['METHOD'] == 'blastp':
+            # print("Running blastp search")
             # blast.make_blast_db(type="prot", db=db['DB_PATH'])
             genome.raw_results[db['DB_NAME']] = blast.run_blast(type="prot",
                                                                 q=genome.file_path,
@@ -66,6 +68,27 @@ def annotate(genome):
                                                                 e=1e-15,
                                                                 make=False,
                                                                 return_query_results=False)
+
+        elif db['METHOD'] == 'hmm':
+            # print("Running HMM search")
+            genome.temp_log = genome.id + '.hmm.log'
+            genome.temp_output = genome.id + '.hmm.temp.txt'
+
+            hmm.run_hmmsearch(genome.file_path,
+                              genome.temp_log,
+                              genome.temp_output,
+                              db['DB_PATH'],
+                              cut_tc=True)
+            genome.raw_results[db['DB_NAME']] = [line.strip() for line in open(genome.temp_output)]
+
+            # print(genome.raw_results[db['DB_NAME']])
+
+        if db['DB_NAME'] in completed_runs:
+            completed_runs[db['DB_NAME']] += 1
+        else:
+            completed_runs[db['DB_NAME']] = 1
+
+        print(completed_runs, end="\r", file=sys.stderr)
 
     # Get Results
     details = pd.DataFrame(columns=['GENOME', 'GENE', 'PRODUCT', 'TYPE', 'ID',
@@ -79,6 +102,8 @@ def annotate(genome):
                 for term in term_list:
                     if term in genome.raw_results[db['DB_NAME']]:
                         for hit in genome.raw_results[db['DB_NAME']][term]:
+                            if hasattr(hit, 'warning'):
+                                run_warnings.append(hit.warning)
                             r = hit.result()
 
                             details = details.append(
@@ -106,6 +131,7 @@ pool.map(annotate, unannotated_genomes)
 pool.close()
 
 # cleanup
+print()
 metadata.remove_temp_files()
 
 detail_results = pd.DataFrame(columns=[
@@ -144,3 +170,5 @@ for genome in annotated_genomes:
 
 pathway_results.to_csv("pathway_results.txt", sep="\t", index=False)
 detail_results.to_csv("detail_results.txt", sep="\t", index=False)
+
+print(list(set(run_warnings)))
