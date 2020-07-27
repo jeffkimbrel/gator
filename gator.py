@@ -8,7 +8,7 @@ import metadata
 import annotation
 from jakomics import utilities, kegg, colors, blast
 
-version = "v0.5.0"
+version = "v0.6.0"
 
 print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version} (Under active development!!){colors.bcolors.END}')
 
