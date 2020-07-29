@@ -6,7 +6,7 @@ class Pathway:
     def __init__(self, pandas_raw):
         self.name = pandas_raw['PATHWAY_NAME']
         self.definition = pandas_raw['DEFINITION']
-
+        self.genes = []
         self.steps = self.parse_definition()
 
         if pd.notnull(pandas_raw['COMPOUNDS']):
@@ -25,6 +25,7 @@ class Pathway:
             complexes_parsed = []
             for complex in complexes_notparsed:
                 genes = set([x.strip() for x in complex.split('+')])
+                self.genes += genes
                 complexes_parsed.append(list(genes))
 
             steps.append(complexes_parsed)

@@ -4,7 +4,7 @@ import uuid
 
 import pandas as pd
 import numpy as np
-from jakomics import colors
+from jakomics import colors, blast
 import pathway
 
 
@@ -24,6 +24,35 @@ class Metadata:
     def __str__(self):
         return "<GATOR Metadata Class>"
 
+    def verify_metadata(self):
+
+        # are all genes unique?
+        genes = self.gene_info['GENE_NAME']
+        if self.gene_info['GENE_NAME'].is_unique:
+            print("All GENE_NAME values are unique.")
+            self.genes = genes
+        else:
+            print(
+                f"{colors.bcolors.RED}ERROR: Duplicate GENE_NAMEs found: {set(genes[genes.duplicated(keep=False)])}{colors.bcolors.END}")
+            sys.exit()
+
+        # are all pathway genes actually being searched for?
+        all_genes_searched_for = True
+        for p in self.pathways:
+            if set(p.genes).issubset(self.genes):
+                pass
+            else:
+                all_genes_searched_for = False
+                print(
+                    f"{colors.bcolors.RED}ERROR: {p.name} GENE_NAMEs ({list(set(p.genes) - set(self.genes))}) are not found on the genes sheet.{colors.bcolors.END}")
+
+        if all_genes_searched_for:
+            print("All GENE_NAMEs in the pathway search are found on the genes sheet.")
+        else:
+            print(
+                f"{colors.bcolors.RED}ERROR: Problems found... please check the gene names on the Excel pathway sheet{colors.bcolors.END}")
+            sys.exit()
+
     def remove_temp_files(self):
         for id, db in self.db_info.iterrows():
             if pd.notnull(db['hal_path']):
@@ -33,6 +62,12 @@ class Metadata:
         self.pathways = []
         for id, path in self.pathway_info.iterrows():
             self.pathways.append(pathway.Pathway(path))
+
+    def make_blast_dbs(self):
+        for id, db in self.db_info.iterrows():
+            if db['METHOD'] == 'blastp':
+                print(f"Making blast database at {db['DB_PATH']}")
+                blast.make_blast_db('prot', db['DB_PATH'])
 
     def create_hal_files(self):
         '''

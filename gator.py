@@ -8,7 +8,7 @@ import metadata
 import annotation
 from jakomics import utilities, kegg, colors, blast, hmm
 
-version = "v0.6.3"
+version = "v0.6.4"
 
 print(f'{colors.bcolors.CYAN}Genome annotATOR (GATOR) {version} (Under active development!!){colors.bcolors.END}')
 
@@ -27,6 +27,14 @@ parser.add_argument('-f', '--files',
                     required=False,
                     default=[])
 
+parser.add_argument('--verify_db',
+                    action='store_true',
+                    help='Just check the database')
+
+parser.add_argument('--save_raw',
+                    action='store_true',
+                    help='Save the raw search data to files')
+
 args = parser.parse_args()
 
 # make some shared objects
@@ -39,9 +47,18 @@ run_warnings = manager.list()
 gator_path = (os.path.dirname(os.path.abspath(sys.argv[0])))
 metadata = metadata.Metadata(os.path.join(gator_path, "gator_db.xlsx"))
 metadata.create_hal_files()
+metadata.make_blast_dbs()
+metadata.verify_metadata()
+
 
 for id, db in metadata.db_info.iterrows():
     completed_runs[db['DB_NAME']] = 0
+
+file_out_paths = {}
+if args.save_raw:
+    for id, db in metadata.db_info.iterrows():
+        file_out_paths[db['DB_NAME']] = open(db['DB_NAME'] + ".txt", "w")
+
 
 # get genomes
 unannotated_genomes = utilities.get_files(args.files, args.in_dir, ["faa"])
@@ -89,6 +106,8 @@ def annotate(genome):
                               db['DB_PATH'],
                               cut_tc=True)
             genome.raw_results[db['DB_NAME']] = hmm.parse_hmm_hits(genome.temp_output)
+            os.system('rm ' + genome.temp_log)
+            os.system('rm ' + genome.temp_output)
 
         completed_runs[db['DB_NAME']] += 1
 
@@ -128,51 +147,67 @@ def annotate(genome):
     genome.annotations = details
     annotated_genomes.append(genome)
 
-
 # MAIN ########################################################################
-pool = Pool()
-pool.map(annotate, unannotated_genomes)
-pool.close()
 
-# cleanup
-print()
-metadata.remove_temp_files()
 
-detail_results = pd.DataFrame(columns=[
-    'GENOME',
-    'GENE',
-    'PRODUCT',
-    'TYPE',
-    'ID',
-    'LOCUS_TAG',
-    'SCORE',
-    'EVAL',
-    'NOTE',
-    'COMPLEX',
-    'REACTION'])
+if args.verify_db:
+    print("Verifying db only")
 
-pathway_results = pd.DataFrame(columns=[
-    'GENOME',
-    'PATHWAY',
-    'PRESENT',
-    'PATHWAY_STEPS',
-    'STEPS_PRESENT',
-    'REACTION',
-    'GENES',
-    'PATHWAY_DEFINITION'])
+else:
 
-for genome in annotated_genomes:
+    pool = Pool()
+    pool.map(annotate, unannotated_genomes)
+    pool.close()
 
-    detail_results = detail_results.append(genome.annotations, ignore_index=True)
+    # cleanup
+    print()
+    metadata.remove_temp_files()
 
-    genes = list(set(genome.annotations['GENE']))
+    detail_results = pd.DataFrame(columns=[
+        'GENOME',
+        'GENE',
+        'PRODUCT',
+        'TYPE',
+        'ID',
+        'LOCUS_TAG',
+        'SCORE',
+        'EVAL',
+        'NOTE',
+        'COMPLEX',
+        'REACTION'])
 
-    for p in metadata.pathways:
-        results = p.score_pathway(genes, genome.short_name)
-        pathway_results = pathway_results.append(results, ignore_index=True)
+    pathway_results = pd.DataFrame(columns=[
+        'GENOME',
+        'PATHWAY',
+        'PRESENT',
+        'PATHWAY_STEPS',
+        'STEPS_PRESENT',
+        'REACTION',
+        'GENES',
+        'PATHWAY_DEFINITION'])
 
-pathway_results.to_csv("pathway_results.txt", sep="\t", index=False)
-detail_results.to_csv("detail_results.txt", sep="\t", index=False)
+    for genome in annotated_genomes:
 
-for w in list(set(run_warnings)):
-    print(f'{colors.bcolors.RED}{w}{colors.bcolors.END}')
+        detail_results = detail_results.append(genome.annotations, ignore_index=True)
+
+        genes = list(set(genome.annotations['GENE']))
+
+        for p in metadata.pathways:
+            results = p.score_pathway(genes, genome.short_name)
+            pathway_results = pathway_results.append(results, ignore_index=True)
+
+    pathway_results.to_csv("pathway_results.txt", sep="\t", index=False)
+    detail_results.to_csv("detail_results.txt", sep="\t", index=False)
+
+    for w in list(set(run_warnings)):
+        print(f'{colors.bcolors.RED}{w}{colors.bcolors.END}')
+
+    if args.save_raw:
+        for genome in annotated_genomes:
+            for db in genome.raw_results:
+                for term in genome.raw_results[db]:
+                    for hit in genome.raw_results[db][term]:
+                        print(genome.short_name, *hit.parsed, sep="\t", file=file_out_paths[db])
+
+        for id, db in metadata.db_info.iterrows():
+            file_out_paths[db['DB_NAME']].close()
