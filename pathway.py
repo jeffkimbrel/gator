@@ -42,14 +42,19 @@ class Pathway:
             genes_present_step = []
             step = i + 1
             for genes in complexes:
-                genes_present_step.append(list(set(annotations) & set(genes)))
+                g = list(set(annotations) & set(genes))
+                if len(g) > 0:
+                    genes_present_step.append(' + '.join(g))
+                else:
+                    genes_present_step.append('[]')
+
                 if set(genes).issubset(set(annotations)):
                     step_present = True
             if step_present:
                 steps_count += 1
             steps_present.append(step_present)
 
-            genes_present.append(genes_present_step)
+            genes_present.append(' | '.join(genes_present_step))
 
         # make fancy compound string
         reaction_string = ""
@@ -76,7 +81,7 @@ class Pathway:
                              'PATHWAY_STEPS': steps,
                              'STEPS_PRESENT': steps_count,
                              'REACTION': reaction_string,
-                             'GENES': genes_present,
+                             'GENES': ' -> '.join(genes_present),
                              'PATHWAY_DEFINITION': self.definition
                              }
                        )
