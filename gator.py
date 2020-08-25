@@ -8,7 +8,7 @@ import metadata
 import annotation
 from jakomics import utilities, kegg, colors, blast, hmm
 
-version = "v0.6.8"
+version = "v0.6.9"
 
 print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version} (Under active development!!){colors.bcolors.END}')
 
@@ -67,7 +67,7 @@ unannotated_genomes = utilities.get_files(args.files, args.in_dir, ["faa"])
 def print_run_counts(c):
     s = "Finished searches:\t"
     for db in c.keys():
-        s += f'{db}:{colors.bcolors.PURPLE}{c[db]}{colors.bcolors.END}\t'
+        s += f'{db}: {colors.bcolors.PURPLE}{c[db]}{colors.bcolors.END}\t'
     print(s, end="\r", file=sys.stderr)
 
 
