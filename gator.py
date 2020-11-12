@@ -3,12 +3,13 @@ import os
 import argparse
 import pandas as pd
 from multiprocessing import Pool, Manager
+from tqdm import tqdm
 
 import metadata
 import annotation
 from jakomics import utilities, kegg, colors, blast, hmm
 
-version = "v0.6.10"
+version = "v0.6.11"
 
 print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version} (Under active development!!){colors.bcolors.END}')
 
@@ -74,7 +75,7 @@ def print_run_counts(c):
 # annotate genomes
 def annotate(genome):
     global annotated_genomes, completed_runs, run_warnings
-    print_run_counts(completed_runs)
+    # print_run_counts(completed_runs)
 
     # run genome against databases. each method type will need its own logic
     genome.raw_results = {}
@@ -111,7 +112,7 @@ def annotate(genome):
 
         completed_runs[db['DB_NAME']] += 1
 
-        print_run_counts(completed_runs)
+        # print_run_counts(completed_runs)
 
     # Get Results
     details = pd.DataFrame(columns=['GENOME', 'GENE', 'PRODUCT', 'TYPE', 'ID',
@@ -155,8 +156,13 @@ if args.verify_db:
 
 else:
 
-    pool = Pool()
-    pool.map(annotate, unannotated_genomes)
+    # pool = Pool()
+    # pool.map(annotate, unannotated_genomes)
+    # pool.close()
+
+    pool = Pool(processes=8)
+    for _ in tqdm(pool.imap_unordered(annotate, unannotated_genomes), total=len(unannotated_genomes), desc="Finished", unit=" genomes"):
+        pass
     pool.close()
 
     # cleanup
