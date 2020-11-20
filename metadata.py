@@ -24,6 +24,10 @@ class Metadata:
     def __str__(self):
         return "<GATOR Metadata Class>"
 
+    def summary(self):
+        print(
+            f"{colors.bcolors.GREEN}GATOR DB GENES: {len(self.gene_info)}\nGATOR DB PATHWAYS: {len(self.pathway_info)}{colors.bcolors.END}")
+
     def verify_metadata(self):
 
         # are all genes unique?

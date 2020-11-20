@@ -9,7 +9,7 @@ import metadata
 import annotation
 from jakomics import utilities, kegg, colors, blast, hmm
 
-version = "v0.6.11"
+version = "v0.6.12"
 
 print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version} (Under active development!!){colors.bcolors.END}')
 
@@ -51,6 +51,7 @@ metadata.create_hal_files()
 metadata.make_blast_dbs()
 metadata.verify_metadata()
 
+metadata.summary()
 
 for id, db in metadata.db_info.iterrows():
     completed_runs[db['DB_NAME']] = 0
