@@ -8,10 +8,12 @@ from tqdm import tqdm
 import metadata
 import annotation
 from jakomics import utilities, kegg, colors, blast, hmm
+from jakomics.genome import GENOME
+from jakomics.file import FILE
 
-version = "v0.6.12"
+version = "v0.7.0"
 
-print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version} (Under active development!!){colors.bcolors.END}')
+print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version}{colors.bcolors.END}')
 
 # OPTIONS #####################################################################
 
@@ -62,21 +64,25 @@ if args.save_raw:
         file_out_paths[db['DB_NAME']] = open(db['DB_NAME'] + ".txt", "w")
 
 
-# get genomes
-unannotated_genomes = utilities.get_files(args.files, args.in_dir, ["faa"])
+# get genomes, extract .faa file from genbank files
+unannotated_genomes = utilities.get_files(args.files, args.in_dir, ["faa", "gb", "gbk", "gbff"])
 
+print(f'{colors.bcolors.GREEN}Extracting fasta files from genbank files{colors.bcolors.END}')
+for genome in unannotated_genomes:
+    if genome.suffix in ['.gb', '.gbk', '.gbff']:
+        gbk = GENOME(genome)
 
-def print_run_counts(c):
-    s = "Finished searches:\t"
-    for db in c.keys():
-        s += f'{db}: {colors.bcolors.PURPLE}{c[db]}{colors.bcolors.END}\t'
-    print(s, end="\r", file=sys.stderr)
-
+        # write genes to genomes and gene class dictionary
+        gbk.faa_path = genome.short_name + "_" + genome.id + ".faa"
+        genome.patric = gbk.genbank_to_fasta(write_faa=gbk.faa_path, return_gene_dict=True)
+        genome.file_path = gbk.faa_path
+        genome.temp_files['faa'] = gbk.faa_path
 
 # annotate genomes
+
+
 def annotate(genome):
     global annotated_genomes, completed_runs, run_warnings
-    # print_run_counts(completed_runs)
 
     # run genome against databases. each method type will need its own logic
     genome.raw_results = {}
@@ -87,7 +93,7 @@ def annotate(genome):
 
         # kofam method
         if db['METHOD'] == 'kofam':
-            hits = kegg.run_kofam(genome.file_path, db['hal_path'])
+            hits = kegg.run_kofam(genome.file_path, db['hal_path'], verbose=False)
             genome.raw_results[db['DB_NAME']] = kegg.parse_kofam_hits(hits)
 
         elif db['METHOD'] == 'blastp':
@@ -112,8 +118,6 @@ def annotate(genome):
             os.system('rm ' + genome.temp_output)
 
         completed_runs[db['DB_NAME']] += 1
-
-        # print_run_counts(completed_runs)
 
     # Get Results
     details = pd.DataFrame(columns=['GENOME', 'GENE', 'PRODUCT', 'TYPE', 'ID',
@@ -148,18 +152,16 @@ def annotate(genome):
                                 ignore_index=True)
     genome.annotations = details
     annotated_genomes.append(genome)
+    genome.remove_temp()
 
 # MAIN ########################################################################
 
 
 if args.verify_db:
     print("Verifying db only")
+    metadata.remove_temp_files()
 
 else:
-
-    # pool = Pool()
-    # pool.map(annotate, unannotated_genomes)
-    # pool.close()
 
     pool = Pool(processes=8)
     for _ in tqdm(pool.imap_unordered(annotate, unannotated_genomes), total=len(unannotated_genomes), desc="Finished", unit=" genomes"):
