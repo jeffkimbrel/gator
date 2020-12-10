@@ -11,7 +11,7 @@ from jakomics import utilities, kegg, colors, blast, hmm
 from jakomics.genome import GENOME
 from jakomics.file import FILE
 
-version = "v0.7.2"
+version = "v0.8.0"
 
 print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version}{colors.bcolors.END}')
 
@@ -23,6 +23,11 @@ parser.add_argument('--in_dir',
                     help="Directory with faa genomes",
                     required=False,
                     default="")
+
+parser.add_argument('-db', '--gator_db',
+                    help="Excel file with custom gator db",
+                    required=False,
+                    default="default")
 
 parser.add_argument('-f', '--files',
                     help="Paths to individual faa files",
@@ -47,8 +52,12 @@ completed_runs = manager.dict()
 run_warnings = manager.list()
 
 # prep metadata and databases
-gator_path = (os.path.dirname(os.path.abspath(sys.argv[0])))
-metadata = metadata.Metadata(os.path.join(gator_path, "gator_db.xlsx"))
+if args.gator_db == "default":
+    gator_path = (os.path.dirname(os.path.abspath(sys.argv[0])))
+    metadata = metadata.Metadata(os.path.join(gator_path, "gator_db.xlsx"))
+else:
+    metadata = metadata.Metadata(args.gator_db)
+
 metadata.create_hal_files()
 metadata.make_blast_dbs()
 metadata.verify_metadata()
@@ -69,6 +78,15 @@ if args.save_raw:
 
 def annotate(genome):
     global annotated_genomes, completed_runs, run_warnings
+
+    if genome.suffix in ['.gb', '.gbk', '.gbff']:
+        gbk = GENOME(genome)
+
+        # write genes to genomes and gene class dictionary
+        gbk.faa_path = genome.short_name + "_" + genome.id + ".faa"
+        genome.patric = gbk.genbank_to_fasta(write_faa=gbk.faa_path, return_gene_dict=True)
+        genome.file_path = gbk.faa_path
+        genome.temp_files['faa'] = gbk.faa_path
 
     # run genome against databases. each method type will need its own logic
     genome.raw_results = {}
@@ -141,16 +159,6 @@ def annotate(genome):
     genome.remove_temp()
 
 
-def convert_genbank(genome):
-    if genome.suffix in ['.gb', '.gbk', '.gbff']:
-        gbk = GENOME(genome)
-
-        # write genes to genomes and gene class dictionary
-        gbk.faa_path = genome.short_name + "_" + genome.id + ".faa"
-        genome.patric = gbk.genbank_to_fasta(write_faa=gbk.faa_path, return_gene_dict=True)
-        genome.file_path = gbk.faa_path
-        genome.temp_files['faa'] = gbk.faa_path
-
 # MAIN ########################################################################
 
 
@@ -162,12 +170,6 @@ else:
 
     # get genomes, extract .faa file from genbank files
     unannotated_genomes = utilities.get_files(args.files, args.in_dir, ["faa", "gb", "gbk", "gbff"])
-
-    print(f'{colors.bcolors.GREEN}Extracting fasta files from genbank files{colors.bcolors.END}')
-    conversion_pool = Pool()
-    for _ in tqdm(conversion_pool.imap_unordered(convert_genbank, unannotated_genomes), total=len(unannotated_genomes), desc="Converted", unit=" genomes"):
-        pass
-    conversion_pool.close()
 
     print(f'{colors.bcolors.GREEN}Starting GATOR{colors.bcolors.END}')
     gator_pool = Pool()
