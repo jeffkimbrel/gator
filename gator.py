@@ -11,7 +11,7 @@ from jakomics import utilities, kegg, colors, blast, hmm
 from jakomics.genome import GENOME
 from jakomics.file import FILE
 
-version = "v0.7.0"
+version = "v0.7.2"
 
 print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version}{colors.bcolors.END}')
 
@@ -63,20 +63,6 @@ if args.save_raw:
     for id, db in metadata.db_info.iterrows():
         file_out_paths[db['DB_NAME']] = open(db['DB_NAME'] + ".txt", "w")
 
-
-# get genomes, extract .faa file from genbank files
-unannotated_genomes = utilities.get_files(args.files, args.in_dir, ["faa", "gb", "gbk", "gbff"])
-
-print(f'{colors.bcolors.GREEN}Extracting fasta files from genbank files{colors.bcolors.END}')
-for genome in unannotated_genomes:
-    if genome.suffix in ['.gb', '.gbk', '.gbff']:
-        gbk = GENOME(genome)
-
-        # write genes to genomes and gene class dictionary
-        gbk.faa_path = genome.short_name + "_" + genome.id + ".faa"
-        genome.patric = gbk.genbank_to_fasta(write_faa=gbk.faa_path, return_gene_dict=True)
-        genome.file_path = gbk.faa_path
-        genome.temp_files['faa'] = gbk.faa_path
 
 # annotate genomes
 
@@ -154,6 +140,17 @@ def annotate(genome):
     annotated_genomes.append(genome)
     genome.remove_temp()
 
+
+def convert_genbank(genome):
+    if genome.suffix in ['.gb', '.gbk', '.gbff']:
+        gbk = GENOME(genome)
+
+        # write genes to genomes and gene class dictionary
+        gbk.faa_path = genome.short_name + "_" + genome.id + ".faa"
+        genome.patric = gbk.genbank_to_fasta(write_faa=gbk.faa_path, return_gene_dict=True)
+        genome.file_path = gbk.faa_path
+        genome.temp_files['faa'] = gbk.faa_path
+
 # MAIN ########################################################################
 
 
@@ -163,10 +160,20 @@ if args.verify_db:
 
 else:
 
-    pool = Pool(processes=8)
-    for _ in tqdm(pool.imap_unordered(annotate, unannotated_genomes), total=len(unannotated_genomes), desc="Finished", unit=" genomes"):
+    # get genomes, extract .faa file from genbank files
+    unannotated_genomes = utilities.get_files(args.files, args.in_dir, ["faa", "gb", "gbk", "gbff"])
+
+    print(f'{colors.bcolors.GREEN}Extracting fasta files from genbank files{colors.bcolors.END}')
+    conversion_pool = Pool()
+    for _ in tqdm(conversion_pool.imap_unordered(convert_genbank, unannotated_genomes), total=len(unannotated_genomes), desc="Converted", unit=" genomes"):
         pass
-    pool.close()
+    conversion_pool.close()
+
+    print(f'{colors.bcolors.GREEN}Starting GATOR{colors.bcolors.END}')
+    gator_pool = Pool()
+    for _ in tqdm(gator_pool.imap_unordered(annotate, unannotated_genomes), total=len(unannotated_genomes), desc="Annotated", unit=" genomes"):
+        pass
+    gator_pool.close()
 
     # cleanup
     print()
