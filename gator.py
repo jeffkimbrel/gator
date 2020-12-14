@@ -11,7 +11,7 @@ from jakomics import utilities, kegg, colors, blast, hmm
 from jakomics.genome import GENOME
 from jakomics.file import FILE
 
-version = "v0.8.1"
+version = "v0.8.2"
 
 print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version}{colors.bcolors.END}')
 
@@ -24,7 +24,7 @@ parser.add_argument('--in_dir',
                     required=False,
                     default="")
 
-parser.add_argument('--excel',
+parser.add_argument('-db', '--gator_db',
                     help="Excel file with custom gator db",
                     required=False,
                     default="default")
@@ -52,11 +52,11 @@ completed_runs = manager.dict()
 run_warnings = manager.list()
 
 # prep metadata and databases
-if args.excel == "default":
+if args.gator_db == "default":
     gator_path = (os.path.dirname(os.path.abspath(sys.argv[0])))
     metadata = metadata.Metadata(os.path.join(gator_path, "gator_db.xlsx"))
 else:
-    metadata = metadata.Metadata(args.excel)
+    metadata = metadata.Metadata(args.gator_db)
 
 metadata.create_hal_files()
 metadata.make_blast_dbs()
