@@ -4,14 +4,16 @@ import argparse
 import pandas as pd
 from multiprocessing import Pool, Manager
 from tqdm import tqdm
+import ast
 
 import metadata
 import annotation
 from jakomics import utilities, kegg, colors, blast, hmm
 from jakomics.genome import GENOME
+from jakomics.patric import Patric_Gene
 from jakomics.file import FILE
 
-version = "v0.8.2"
+version = "v1.0.0"
 
 print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version}{colors.bcolors.END}')
 
@@ -39,6 +41,10 @@ parser.add_argument('--verify_db',
                     action='store_true',
                     help='Just check the database')
 
+parser.add_argument('-p', '--patric',
+                    action='store_true',
+                    help='Genbank files are from patric. Adds patric and EC db support')
+
 parser.add_argument('--save_raw',
                     action='store_true',
                     help='Save the raw search data to files')
@@ -48,7 +54,6 @@ args = parser.parse_args()
 # make some shared objects
 manager = Manager()
 annotated_genomes = manager.list()
-completed_runs = manager.dict()
 run_warnings = manager.list()
 
 # prep metadata and databases
@@ -64,20 +69,18 @@ metadata.verify_metadata()
 
 metadata.summary()
 
-for id, db in metadata.db_info.iterrows():
-    completed_runs[db['DB_NAME']] = 0
-
 file_out_paths = {}
 if args.save_raw:
     for id, db in metadata.db_info.iterrows():
         file_out_paths[db['DB_NAME']] = open(db['DB_NAME'] + ".txt", "w")
 
 
-# annotate genomes
+if args.patric:
+    print(f'{colors.bcolors.GREEN}Patric mode enabled{colors.bcolors.END}')
 
 
 def annotate(genome):
-    global annotated_genomes, completed_runs, run_warnings
+    global annotated_genomes, run_warnings
 
     if genome.suffix in ['.gb', '.gbk', '.gbff']:
         gbk = GENOME(genome)
@@ -94,8 +97,6 @@ def annotate(genome):
         genome.raw_results[db['DB_NAME']] = {}
 
         # raw results are dicts with term as key, and list of objects as values
-
-        # kofam method
         if db['METHOD'] == 'kofam':
             hits = kegg.run_kofam(genome.file_path, db['hal_path'], verbose=False)
             genome.raw_results[db['DB_NAME']] = kegg.parse_kofam_hits(hits)
@@ -107,7 +108,6 @@ def annotate(genome):
                                                                 e=1e-15,
                                                                 make=False,
                                                                 return_query_results=False)
-
         elif db['METHOD'] == 'hmm':
             genome.temp_log = genome.id + '.hmm.log'
             genome.temp_output = genome.id + '.hmm.temp.txt'
@@ -117,11 +117,36 @@ def annotate(genome):
                               genome.temp_output,
                               db['DB_PATH'],
                               cut_tc=True)
+
             genome.raw_results[db['DB_NAME']] = hmm.parse_hmm_hits(genome.temp_output)
             os.system('rm ' + genome.temp_log)
             os.system('rm ' + genome.temp_output)
 
-        completed_runs[db['DB_NAME']] += 1
+        elif db['METHOD'] == 'EC':
+            if args.patric:
+                for gene in genome.patric:
+                    if hasattr(genome.patric[gene], 'EC_number'):
+                        patric_annotation = Patric_Gene(genome.patric[gene].id)
+                        for EC in genome.patric[gene].EC_number:
+                            patric_annotation.annotation = EC
+
+                            if EC in genome.raw_results[db['DB_NAME']]:
+                                genome.raw_results[db['DB_NAME']][EC].append(patric_annotation)
+                            else:
+                                genome.raw_results[db['DB_NAME']][EC] = [patric_annotation]
+
+        elif db['METHOD'] == 'PATRIC':
+            if args.patric:
+                for gene in genome.patric:
+                    if hasattr(genome.patric[gene], 'product'):
+                        patric_annotation = Patric_Gene(genome.patric[gene].id)
+                        for product in genome.patric[gene].product:
+                            patric_annotation.annotation = product
+
+                            if product in genome.raw_results[db['DB_NAME']]:
+                                genome.raw_results[db['DB_NAME']][product].append(patric_annotation)
+                            else:
+                                genome.raw_results[db['DB_NAME']][product] = [patric_annotation]
 
     # Get Results
     details = pd.DataFrame(columns=['GENOME', 'GENE', 'PRODUCT', 'TYPE', 'ID',
@@ -132,6 +157,13 @@ def annotate(genome):
         for db_index, db in metadata.db_info.iterrows():
             if pd.notnull(gene[db['DB_NAME']]):
                 term_list = [x.strip() for x in gene[db['DB_NAME']].split(',')]
+
+                if db['DB_NAME'] == "PATRIC":
+                    '''
+                    Patric db is formatted as a list, rather than comma-delimited
+                    '''
+                    term_list = [x.strip() for x in ast.literal_eval(gene[db['DB_NAME']])]
+
                 for term in term_list:
                     if term in genome.raw_results[db['DB_NAME']]:
                         for hit in genome.raw_results[db['DB_NAME']][term]:
