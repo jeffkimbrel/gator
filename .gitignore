@@ -2,13 +2,11 @@
 .DS_Store
 test_data/*
 *.pyc
-pathway_results.txt
-detail_results.txt
 db/gator.faa.phr
 db/gator.faa.pin
 db/gator.faa.psq
 ~$gator_db.xlsx
 *.txt
 ~$gac_rsm.xlsx
-
 db/*
+db/pfams.hmm
