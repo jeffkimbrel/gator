@@ -13,7 +13,7 @@ from jakomics.genome import GENOME
 from jakomics.patric import Patric_Gene
 from jakomics.file import FILE
 
-version = "v1.0.2"
+version = "v1.0.3"
 
 print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version}{colors.bcolors.END}')
 
@@ -98,7 +98,8 @@ def annotate(genome):
 
         # raw results are dicts with term as key, and list of objects as values
         if db['METHOD'] == 'kofam':
-            hits = kegg.run_kofam(genome.file_path, db['hal_path'], verbose=False)
+            hits = kegg.run_kofam(genome.file_path, db['hal_path'], os.path.join(
+                db['DB_PATH'], 'ko_list'), verbose=False)
             genome.raw_results[db['DB_NAME']] = kegg.parse_kofam_hits(hits)
 
         elif db['METHOD'] == 'blastp':
