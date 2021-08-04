@@ -13,13 +13,14 @@ from jakomics.genome import GENOME
 from jakomics.patric import Patric_Gene
 from jakomics.file import FILE
 
-version = "v1.0.4"
+version = "v1.1.0"
 
 print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version}{colors.bcolors.END}')
 
 # OPTIONS #####################################################################
 
-parser = argparse.ArgumentParser(description="", formatter_class=argparse.RawTextHelpFormatter)
+parser = argparse.ArgumentParser(description="",
+                                 formatter_class=argparse.RawTextHelpFormatter)
 
 parser.add_argument('--in_dir',
                     help="Directory with faa genomes",
@@ -87,7 +88,8 @@ def annotate(genome):
 
         # write genes to genomes and gene class dictionary
         gbk.faa_path = genome.short_name + "_" + genome.id + ".faa"
-        genome.patric = gbk.genbank_to_fasta(write_faa=gbk.faa_path, return_gene_dict=True)
+        genome.patric = gbk.genbank_to_fasta(
+            write_faa=gbk.faa_path, return_gene_dict=True)
         genome.file_path = gbk.faa_path
         genome.temp_files['faa'] = gbk.faa_path
 
@@ -113,15 +115,22 @@ def annotate(genome):
             genome.temp_log = genome.id + '.hmm.log'
             genome.temp_output = genome.id + '.hmm.temp.txt'
 
-            hmm.run_hmmsearch(genome.file_path,
+            r = hmm.run_hmmsearch(genome.file_path,
                               genome.temp_log,
                               genome.temp_output,
                               db['DB_PATH'],
-                              cut_tc=True,
+                              cut_tc=False,  # hot fix
                               echo=False,
                               run=True)
 
-            genome.raw_results[db['DB_NAME']] = hmm.parse_hmm_hits(genome.temp_output)
+            if r != ['']:
+                print(f"{colors.bcolors.YELLOW}ERROR: hmmsearch threw the following error while searching {genome.name} against {db['DB_PATH']}{colors.bcolors.END}")
+                for line in r:
+                    if len(line) > 0:
+                        print(f'\t-{colors.bcolors.YELLOW}{line.rstrip()}{colors.bcolors.END}')
+
+            genome.raw_results[db['DB_NAME']] = hmm.parse_hmm_hits(
+                genome.temp_output)
             os.system('rm ' + genome.temp_log)
             os.system('rm ' + genome.temp_output)
 
@@ -134,9 +143,11 @@ def annotate(genome):
                             patric_annotation.annotation = EC
 
                             if EC in genome.raw_results[db['DB_NAME']]:
-                                genome.raw_results[db['DB_NAME']][EC].append(patric_annotation)
+                                genome.raw_results[db['DB_NAME']][EC].append(
+                                    patric_annotation)
                             else:
-                                genome.raw_results[db['DB_NAME']][EC] = [patric_annotation]
+                                genome.raw_results[db['DB_NAME']][EC] = [
+                                    patric_annotation]
 
         elif db['METHOD'] == 'PATRIC':
             if args.patric:
@@ -147,9 +158,11 @@ def annotate(genome):
                             patric_annotation.annotation = product
 
                             if product in genome.raw_results[db['DB_NAME']]:
-                                genome.raw_results[db['DB_NAME']][product].append(patric_annotation)
+                                genome.raw_results[db['DB_NAME']][product].append(
+                                    patric_annotation)
                             else:
-                                genome.raw_results[db['DB_NAME']][product] = [patric_annotation]
+                                genome.raw_results[db['DB_NAME']][product] = [
+                                    patric_annotation]
 
     # Get Results
     details = pd.DataFrame(columns=['GENOME', 'GENE', 'PRODUCT', 'TYPE', 'ID',
@@ -165,7 +178,8 @@ def annotate(genome):
                     '''
                     Patric db is formatted as a list, rather than comma-delimited
                     '''
-                    term_list = [x.strip() for x in ast.literal_eval(gene[db['DB_NAME']])]
+                    term_list = [x.strip()
+                                 for x in ast.literal_eval(gene[db['DB_NAME']])]
 
                 for term in term_list:
                     if term in genome.raw_results[db['DB_NAME']]:
@@ -204,7 +218,8 @@ if args.verify_db:
 else:
 
     # get genomes, extract .faa file from genbank files
-    unannotated_genomes = utilities.get_files(args.files, args.in_dir, ["faa", "gb", "gbk", "gbff"])
+    unannotated_genomes = utilities.get_files(
+        args.files, args.in_dir, ["faa", "gb", "gbk", "gbff"])
 
     print(f'{colors.bcolors.GREEN}Starting GATOR{colors.bcolors.END}')
     gator_pool = Pool()
@@ -241,13 +256,15 @@ else:
 
     for genome in annotated_genomes:
 
-        detail_results = detail_results.append(genome.annotations, ignore_index=True)
+        detail_results = detail_results.append(
+            genome.annotations, ignore_index=True)
 
         genes = list(set(genome.annotations['GENE']))
 
         for p in metadata.pathways:
             results = p.score_pathway(genes, genome.short_name)
-            pathway_results = pathway_results.append(results, ignore_index=True)
+            pathway_results = pathway_results.append(
+                results, ignore_index=True)
 
     pathway_results.to_csv("pathway_results.txt", sep="\t", index=False)
     detail_results.to_csv("detail_results.txt", sep="\t", index=False)
@@ -260,7 +277,8 @@ else:
             for db in genome.raw_results:
                 for term in genome.raw_results[db]:
                     for hit in genome.raw_results[db][term]:
-                        print(genome.short_name, *hit.parsed, sep="\t", file=file_out_paths[db])
+                        print(genome.short_name, *hit.parsed,
+                              sep="\t", file=file_out_paths[db])
 
         for id, db in metadata.db_info.iterrows():
             file_out_paths[db['DB_NAME']].close()

@@ -10,10 +10,15 @@ import pathway
 
 class Metadata:
     def __init__(self, metadata_file_path):
-        self.db_info = pd.read_excel(metadata_file_path, sheet_name="db", engine='openpyxl')
-        self.gene_info = pd.read_excel(metadata_file_path, sheet_name="gene", engine='openpyxl')
-        self.pathway_info = pd.read_excel(
-            metadata_file_path, sheet_name="pathway", engine='openpyxl')
+        self.db_info = pd.read_excel(metadata_file_path,
+                                     sheet_name="db",
+                                     engine='openpyxl')
+        self.gene_info = pd.read_excel(metadata_file_path,
+                                       sheet_name="gene",
+                                       engine='openpyxl')
+        self.pathway_info = pd.read_excel(metadata_file_path,
+                                          sheet_name="pathway",
+                                          engine='openpyxl')
 
         # remove empty rows
         self.db_info.dropna(subset=["DB_NAME"], inplace=True)
