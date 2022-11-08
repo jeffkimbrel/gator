@@ -86,3 +86,17 @@ class Pathway:
                              }
                        )
         return df
+
+
+if __name__ == "__main__":
+
+    p = pd.Series(["test", 
+                    "ilvB -> ilvH | ilvM -> ilvC -> ilvD -> ilvE",
+                    "",
+                    ""],
+        index = ["PATHWAY_NAME", "DEFINITION", "COMPOUNDS", "PATHWAY_NOTES"])
+
+
+
+    p = Pathway(p)
+    print(p.parse_definition())

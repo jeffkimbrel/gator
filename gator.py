@@ -101,7 +101,7 @@ def annotate(genome):
         # raw results are dicts with term as key, and list of objects as values
         if db['METHOD'] == 'kofam':
             hits = kegg.run_kofam(genome.file_path, db['hal_path'], os.path.join(
-                db['DB_PATH'], 'ko_list'))
+                db['DB_PATH'], 'ko_list'), echo=False)
             genome.raw_results[db['DB_NAME']] = kegg.parse_kofam_hits(hits)
 
         elif db['METHOD'] == 'blastp':
