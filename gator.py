@@ -5,6 +5,7 @@ import pandas as pd
 from multiprocessing import Pool, Manager
 from tqdm import tqdm
 import ast
+import datetime
 
 import metadata
 import annotation
@@ -13,7 +14,7 @@ from jakomics.genome import GENOME
 from jakomics.patric import Patric_Gene
 from jakomics.file import FILE
 
-version = "v1.1.0"
+version = "v1.2.0"
 
 print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version}{colors.bcolors.END}')
 
@@ -49,6 +50,11 @@ parser.add_argument('-p', '--patric',
 parser.add_argument('--save_raw',
                     action='store_true',
                     help='Save the raw search data to files')
+
+parser.add_argument('-n', '--name',
+                    help="Name to prepend the output files. Defaults to a timestamp",
+                    required=False,
+                    default=datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
 
 args = parser.parse_args()
 
@@ -222,7 +228,7 @@ else:
         args.files, args.in_dir, ["faa", "gb", "gbk", "gbff"])
 
     print(f'{colors.bcolors.GREEN}Starting GATOR{colors.bcolors.END}')
-    gator_pool = Pool()
+    gator_pool = Pool(12)
     for _ in tqdm(gator_pool.imap_unordered(annotate, unannotated_genomes), total=len(unannotated_genomes), desc="Annotated", unit=" genomes"):
         pass
     gator_pool.close()
@@ -266,8 +272,8 @@ else:
             pathway_results = pathway_results.append(
                 results, ignore_index=True)
 
-    pathway_results.to_csv("pathway_results.txt", sep="\t", index=False)
-    detail_results.to_csv("detail_results.txt", sep="\t", index=False)
+    pathway_results.to_csv(f"{args.name}_pathway_results.txt", sep="\t", index=False)
+    detail_results.to_csv(f"{args.name}_detail_results.txt", sep="\t", index=False)
 
     for w in list(set(run_warnings)):
         print(f'{colors.bcolors.RED}{w}{colors.bcolors.END}')
