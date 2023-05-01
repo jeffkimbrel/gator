@@ -2,19 +2,18 @@ import sys
 import os
 import argparse
 import pandas as pd
-from multiprocessing import Pool, Manager
+from multiprocessing import Pool
 from tqdm import tqdm
 import ast
 import datetime
 
-import metadata
-import annotation
+import metadata as m
 from jakomics import utilities, kegg, colors, blast, hmm
 from jakomics.genome import GENOME
 from jakomics.patric import Patric_Gene
 from jakomics.file import FILE
 
-version = "v1.2.0"
+version = "v1.3.0"
 
 print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version}{colors.bcolors.END}')
 
@@ -58,36 +57,28 @@ parser.add_argument('-n', '--name',
 
 args = parser.parse_args()
 
-# make some shared objects
-manager = Manager()
-annotated_genomes = manager.list()
-run_warnings = manager.list()
+# Functions
 
-# prep metadata and databases
-if args.gator_db == "default":
-    gator_path = (os.path.dirname(os.path.abspath(sys.argv[0])))
-    metadata = metadata.Metadata(os.path.join(gator_path, "gator_db.xlsx"))
-else:
-    metadata = metadata.Metadata(args.gator_db)
+def prep_metadata():
+    # prep metadata and databases
+    
+    if args.gator_db == "default":
+        gator_path = (os.path.dirname(os.path.abspath(sys.argv[0])))
+        metadata = m.Metadata(os.path.join(gator_path, "gator_db.xlsx"))
+    else:
+        metadata = m.Metadata(args.gator_db)
 
-metadata.create_hal_files()
-metadata.make_blast_dbs()
-metadata.verify_metadata()
+    metadata.create_hal_files()
+    metadata.make_blast_dbs()
+    metadata.verify_metadata()
 
-metadata.summary()
+    metadata.summary()
 
-file_out_paths = {}
-if args.save_raw:
-    for id, db in metadata.db_info.iterrows():
-        file_out_paths[db['DB_NAME']] = open(db['DB_NAME'] + ".txt", "w")
+    return(metadata)
 
-
-if args.patric:
-    print(f'{colors.bcolors.GREEN}Patric mode enabled{colors.bcolors.END}')
-
+metadata = prep_metadata()
 
 def annotate(genome):
-    global annotated_genomes, run_warnings
 
     if genome.suffix in ['.gb', '.gbk', '.gbff']:
         gbk = GENOME(genome)
@@ -190,12 +181,9 @@ def annotate(genome):
                 for term in term_list:
                     if term in genome.raw_results[db['DB_NAME']]:
                         for hit in genome.raw_results[db['DB_NAME']][term]:
-                            if hasattr(hit, 'warning'):
-                                run_warnings.append(hit.warning)
                             r = hit.result()
 
-                            details = details.append(
-                                pd.Series(data={'GENOME': genome.short_name,
+                            results = pd.Series(data={'GENOME': genome.short_name,
                                                 'GENE': gene['GENE_NAME'],
                                                 'PRODUCT': gene['GENE_PRODUCT'],
                                                 'TYPE': db['DB_NAME'],
@@ -207,84 +195,63 @@ def annotate(genome):
                                                 'COMPLEX': gene['COMPLEX'],
                                                 'REACTION': gene['REACTION']
                                                 }
-                                          ),
-                                ignore_index=True)
-    genome.annotations = details
-    annotated_genomes.append(genome)
+                                          )
+
+                            details = pd.concat([details, results.to_frame().T], ignore_index=True)
+
+    details.to_csv(f"{genome.name}_gator_detail.txt", sep="\t", index=False)
+
+    # Score potatoes
+    genes = list(set(details['GENE']))
+    pathway_results = pd.DataFrame(columns=['GENOME',
+                                            'PATHWAY',
+                                            'PRESENT',
+                                            'PATHWAY_STEPS',
+                                            'STEPS_PRESENT',
+                                            'REACTION',
+                                            'GENES',
+                                            'PATHWAY_DEFINITION'])
+    
+    for p in metadata.pathways:
+        results = p.score_pathway(genes, genome.short_name)
+        pathway_results = pd.concat([pathway_results, results.to_frame().T], ignore_index=True)
+
+    pathway_results.to_csv(f"{genome.name}_gator_pathway.txt", sep="\t", index=False)
+
+    # Clean Up
     genome.remove_temp()
+
 
 
 # MAIN ########################################################################
 
+if __name__ == "__main__":
 
-if args.verify_db:
-    print("Verifying db only")
-    metadata.remove_temp_files()
+    if args.verify_db:
+        print("Verifying db only")
+        metadata.remove_temp_files()
 
-else:
+    else:
+        
+        file_out_paths = {}
+        if args.save_raw:
+            for id, db in metadata.db_info.iterrows():
+                file_out_paths[db['DB_NAME']] = open(db['DB_NAME'] + ".txt", "w")
 
-    # get genomes, extract .faa file from genbank files
-    unannotated_genomes = utilities.get_files(
-        args.files, args.in_dir, ["faa", "gb", "gbk", "gbff"])
+        if args.patric:
+            print(f'{colors.bcolors.GREEN}Patric mode enabled{colors.bcolors.END}')
 
-    print(f'{colors.bcolors.GREEN}Starting GATOR{colors.bcolors.END}')
-    gator_pool = Pool(12)
-    for _ in tqdm(gator_pool.imap_unordered(annotate, unannotated_genomes), total=len(unannotated_genomes), desc="Annotated", unit=" genomes"):
-        pass
-    gator_pool.close()
+        # get genomes, extract .faa file from genbank files
+        unannotated_genomes = utilities.get_files(
+            args.files, args.in_dir, ["faa", "gb", "gbk", "gbff"])
 
-    # cleanup
-    print()
-    metadata.remove_temp_files()
+        print(f'{colors.bcolors.GREEN}Starting GATOR{colors.bcolors.END}')
+        gator_pool = Pool()
 
-    detail_results = pd.DataFrame(columns=[
-        'GENOME',
-        'GENE',
-        'PRODUCT',
-        'TYPE',
-        'ID',
-        'LOCUS_TAG',
-        'SCORE',
-        'EVAL',
-        'NOTE',
-        'COMPLEX',
-        'REACTION'])
+        for _ in tqdm(gator_pool.imap_unordered(annotate, unannotated_genomes), total=len(unannotated_genomes), desc="Annotated", unit=" genomes"):
+            pass
+        gator_pool.close()
 
-    pathway_results = pd.DataFrame(columns=[
-        'GENOME',
-        'PATHWAY',
-        'PRESENT',
-        'PATHWAY_STEPS',
-        'STEPS_PRESENT',
-        'REACTION',
-        'GENES',
-        'PATHWAY_DEFINITION'])
-
-    for genome in annotated_genomes:
-
-        detail_results = detail_results.append(
-            genome.annotations, ignore_index=True)
-
-        genes = list(set(genome.annotations['GENE']))
-
-        for p in metadata.pathways:
-            results = p.score_pathway(genes, genome.short_name)
-            pathway_results = pathway_results.append(
-                results, ignore_index=True)
-
-    pathway_results.to_csv(f"{args.name}_pathway_results.txt", sep="\t", index=False)
-    detail_results.to_csv(f"{args.name}_detail_results.txt", sep="\t", index=False)
-
-    for w in list(set(run_warnings)):
-        print(f'{colors.bcolors.RED}{w}{colors.bcolors.END}')
-
-    if args.save_raw:
-        for genome in annotated_genomes:
-            for db in genome.raw_results:
-                for term in genome.raw_results[db]:
-                    for hit in genome.raw_results[db][term]:
-                        print(genome.short_name, *hit.parsed,
-                              sep="\t", file=file_out_paths[db])
-
-        for id, db in metadata.db_info.iterrows():
-            file_out_paths[db['DB_NAME']].close()
+        # cleanup
+        metadata.remove_temp_files()
+        print(f'{colors.bcolors.GREEN}Thanks for using the Genome annotATOR!{colors.bcolors.END}')

@@ -1,6 +1,5 @@
 import pandas as pd
 
-
 class Annotation:
     def __init__(self, pandas_row):
         self.gene = pandas_row['GENE_NAME']
