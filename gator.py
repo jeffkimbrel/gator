@@ -6,16 +6,12 @@ from multiprocessing import Pool
 from tqdm import tqdm
 import ast
 import datetime
+import pickle
 
 import metadata as m
 from jakomics import utilities, kegg, colors, blast, hmm
 from jakomics.genome import GENOME
 from jakomics.patric import Patric_Gene
-from jakomics.file import FILE
-
-version = "v1.3.1"
-
-print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version}{colors.bcolors.END}')
 
 # OPTIONS #####################################################################
 
@@ -55,11 +51,22 @@ parser.add_argument('-n', '--name',
                     required=False,
                     default=datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
 
+parser.add_argument('-t', '--threads',
+                    help="Threads to use",
+                    type = int,
+                    required=False,
+                    default=8)
+
+parser.add_argument('--pickle',
+                    help="Path to save gator metadata pickle file",
+                    required=False,
+                    default=f"gator_metadata.pickle")
+
 args = parser.parse_args()
 
 # Functions
 
-def prep_metadata():
+def prep_metadata(version, genome_paths):
     # prep metadata and databases
     
     if args.gator_db == "default":
@@ -68,17 +75,25 @@ def prep_metadata():
     else:
         metadata = m.Metadata(args.gator_db)
 
+    metadata.version = version
+    metadata.genome_paths = genome_paths
     metadata.create_hal_files()
     metadata.make_blast_dbs()
     metadata.verify_metadata()
 
     metadata.summary()
 
+    file = open(args.pickle, 'wb')
+    pickle.dump(metadata, file)
+    file.close()
+
     return(metadata)
 
-metadata = prep_metadata()
-
 def annotate(genome):
+
+    file = open(args.pickle, 'rb')
+    metadata = pickle.load(file)
+    file.close()
 
     if genome.suffix in ['.gb', '.gbk', '.gbff']:
         gbk = GENOME(genome)
@@ -131,20 +146,20 @@ def annotate(genome):
             os.system('rm ' + genome.temp_log)
             os.system('rm ' + genome.temp_output)
 
-        elif db['METHOD'] == 'EC':
-            if args.patric:
-                for gene in genome.patric:
-                    if hasattr(genome.patric[gene], 'EC_number'):
-                        patric_annotation = Patric_Gene(genome.patric[gene].id)
-                        for EC in genome.patric[gene].EC_number:
-                            patric_annotation.annotation = EC
+        # elif db['METHOD'] == 'EC':
+        #     if args.patric:
+        #         for gene in genome.patric:
+        #             if hasattr(genome.patric[gene], 'EC_number'):
+        #                 patric_annotation = Patric_Gene(genome.patric[gene].id)
+        #                 for EC in genome.patric[gene].EC_number:
+        #                     patric_annotation.annotation = EC
 
-                            if EC in genome.raw_results[db['DB_NAME']]:
-                                genome.raw_results[db['DB_NAME']][EC].append(
-                                    patric_annotation)
-                            else:
-                                genome.raw_results[db['DB_NAME']][EC] = [
-                                    patric_annotation]
+        #                     if EC in genome.raw_results[db['DB_NAME']]:
+        #                         genome.raw_results[db['DB_NAME']][EC].append(
+        #                             patric_annotation)
+        #                     else:
+        #                         genome.raw_results[db['DB_NAME']][EC] = [
+        #                             patric_annotation]
 
         elif db['METHOD'] == 'PATRIC':
             if args.patric:
@@ -200,7 +215,7 @@ def annotate(genome):
 
                             details = pd.concat([details, results.to_frame().T], ignore_index=True)
 
-    details.to_csv(f"{genome.name}_gator_detail.txt", sep="\t", index=False)
+    details.to_csv(f"{genome.short_name}_gator_{args.name}_detail.txt", sep="\t", index=False)
 
 
     # Score potatoes
@@ -218,23 +233,32 @@ def annotate(genome):
         results = p.score_pathway(genes, genome.short_name)
         pathway_results = pd.concat([pathway_results, results.to_frame().T], ignore_index=True)
 
-    pathway_results.to_csv(f"{genome.name}_gator_pathway.txt", sep="\t", index=False)
+    pathway_results.to_csv(f"{genome.short_name}_gator_{args.name}_pathway.txt", sep="\t", index=False)
 
     # Clean Up
     genome.remove_temp()
 
-
-
 # MAIN ########################################################################
 
 if __name__ == "__main__":
+    
+    version = "v1.4.0"
+
+    print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version}{colors.bcolors.END}')
 
     if args.verify_db:
-        print("Verifying db only")
+        print(f"{colors.bcolors.PURPLE}Verifying db only{colors.bcolors.END}")
+        metadata = prep_metadata(version)
         metadata.remove_temp_files()
 
     else:
         
+        # get genomes, extract .faa file from genbank files
+        unannotated_genomes = utilities.get_files(
+            args.files, args.in_dir, ["faa", "gb", "gbk", "gbff"])
+        
+        metadata = prep_metadata(version, [[o.short_name, o.file_path, o.id] for o in unannotated_genomes]) # gator version and list of genomes for pickle file
+
         # # save raw data
         # file_out_paths = {}
         # if args.save_raw:
@@ -244,12 +268,16 @@ if __name__ == "__main__":
         if args.patric:
             print(f'{colors.bcolors.GREEN}Patric mode enabled{colors.bcolors.END}')
 
-        # get genomes, extract .faa file from genbank files
-        unannotated_genomes = utilities.get_files(
-            args.files, args.in_dir, ["faa", "gb", "gbk", "gbff"])
+        # decide number of threads
+        threads = args.threads
+        if len(unannotated_genomes) < threads:
+            threads = len(unannotated_genomes)
+        
+        if threads > os.cpu_count():
+            threads = os.cpu_count()
 
-        print(f'{colors.bcolors.GREEN}Starting GATOR{colors.bcolors.END}')
-        gator_pool = Pool()
+        print(f'{colors.bcolors.GREEN}Starting GATOR with {threads} thread(s){colors.bcolors.END}')
+        gator_pool = Pool(threads)
 
         for _ in tqdm(gator_pool.imap_unordered(annotate, unannotated_genomes), total=len(unannotated_genomes), desc="Annotated", unit=" genomes"):
             pass
