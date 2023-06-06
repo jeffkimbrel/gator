@@ -13,7 +13,7 @@ from jakomics.genome import GENOME
 from jakomics.patric import Patric_Gene
 from jakomics.file import FILE
 
-version = "v1.3.0"
+version = "v1.3.1"
 
 print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version}{colors.bcolors.END}')
 
@@ -165,7 +165,8 @@ def annotate(genome):
     details = pd.DataFrame(columns=['GENOME', 'GENE', 'PRODUCT', 'TYPE', 'ID',
                                     'LOCUS_TAG', 'SCORE', 'EVAL', 'NOTE', 'COMPLEX', "REACTION"])
 
-    # the result method needs to return the same data regardless of class
+    # parse details output file
+    ## the result method needs to return the same data regardless of class
     for gene_index, gene in metadata.gene_info.iterrows():
         for db_index, db in metadata.db_info.iterrows():
             if pd.notnull(gene[db['DB_NAME']]):
@@ -201,6 +202,7 @@ def annotate(genome):
 
     details.to_csv(f"{genome.name}_gator_detail.txt", sep="\t", index=False)
 
+
     # Score potatoes
     genes = list(set(details['GENE']))
     pathway_results = pd.DataFrame(columns=['GENOME',
@@ -233,10 +235,11 @@ if __name__ == "__main__":
 
     else:
         
-        file_out_paths = {}
-        if args.save_raw:
-            for id, db in metadata.db_info.iterrows():
-                file_out_paths[db['DB_NAME']] = open(db['DB_NAME'] + ".txt", "w")
+        # # save raw data
+        # file_out_paths = {}
+        # if args.save_raw:
+        #     for id, db in metadata.db_info.iterrows():
+        #         file_out_paths[db['DB_NAME']] = open(db['DB_NAME'] + ".txt", "w")
 
         if args.patric:
             print(f'{colors.bcolors.GREEN}Patric mode enabled{colors.bcolors.END}')
