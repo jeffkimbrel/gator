@@ -75,17 +75,18 @@ def prep_metadata(version, genome_paths):
     else:
         metadata = m.Metadata(args.gator_db)
 
-    metadata.version = version
-    metadata.genome_paths = genome_paths
     metadata.create_hal_files()
     metadata.make_blast_dbs()
     metadata.verify_metadata()
 
     metadata.summary()
 
-    file = open(args.pickle, 'wb')
-    pickle.dump(metadata, file)
-    file.close()
+    if args.verify_db == False:
+        metadata.version = version
+        metadata.genome_paths = genome_paths
+        file = open(args.pickle, 'wb')
+        pickle.dump(metadata, file)
+        file.close()
 
     return(metadata)
 
@@ -242,13 +243,13 @@ def annotate(genome):
 
 if __name__ == "__main__":
     
-    version = "v1.4.0"
+    version = "v1.5.0"
 
     print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version}{colors.bcolors.END}')
 
     if args.verify_db:
         print(f"{colors.bcolors.PURPLE}Verifying db only{colors.bcolors.END}")
-        metadata = prep_metadata(version)
+        metadata = prep_metadata(version, "")
         metadata.remove_temp_files()
 
     else:
