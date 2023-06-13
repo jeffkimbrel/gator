@@ -79,20 +79,19 @@ class Metadata:
                 print(f"Making blast database at {db['DB_PATH']}")
                 blast.make_blast_db('prot', db['DB_PATH'])
 
-    def create_hal_files(self):
+    def create_hal_files(self, out_dir):
         '''
         finds dbs of method kofam and makes a .hal file of all KOs under that db name on the gene sheet.
         Adds hal path to hal_path line in db_info
         '''
-
-        print(f'Making .hal files')
 
         self.db_info['hal_path'] = None
 
         for id, db in self.db_info.iterrows():
 
             if db['METHOD'] == 'kofam':
-                temp_file = uuid.uuid4().hex + ".hal"
+                temp_file = os.path.join(out_dir, uuid.uuid4().hex + ".hal")
+                print(f'Making .hal file at {temp_file}')
                 hal_target = open(temp_file, 'w')
                 self.db_info.at[id, 'hal_path'] = temp_file
 
@@ -104,6 +103,7 @@ class Metadata:
                         ko_list = [x.strip() for x in ko_raw_list.split(',')]
                         for ko in ko_list:
                             hmm_path = os.path.join(db['DB_PATH'], ko + ".hmm")
+
                             if os.path.exists(hmm_path):
                                 hal_target.write(hmm_path + "\n")
                             else:
@@ -112,7 +112,7 @@ class Metadata:
                                     f'WARNING: {colors.bcolors.RED}{ko}.hmm{colors.bcolors.END} is not found at {db["DB_PATH"]}')
 
                 hal_target.close()
-
+                
                 if found_problem:
                     print("There were some issues here...")
                     os.remove(temp_file)

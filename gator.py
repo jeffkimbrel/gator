@@ -23,6 +23,11 @@ parser.add_argument('--in_dir',
                     required=False,
                     default="")
 
+parser.add_argument('--out_dir',
+                    help="Directory to write results to",
+                    required=False,
+                    default="")
+
 parser.add_argument('-db', '--gator_db',
                     help="Excel file with custom gator db",
                     required=False,
@@ -37,6 +42,10 @@ parser.add_argument('-f', '--files',
 parser.add_argument('--verify_db',
                     action='store_true',
                     help='Just check the database')
+
+parser.add_argument('--docker',
+                    action='store_true',
+                    help='Run gator in a docker container')
 
 parser.add_argument('-p', '--patric',
                     action='store_true',
@@ -64,6 +73,10 @@ parser.add_argument('--pickle',
 
 args = parser.parse_args()
 
+if args.docker:
+    print("gator is running in docker mode...")
+    args.out_dir = "/gator-app"
+
 # Functions
 
 def prep_metadata(version, genome_paths):
@@ -75,7 +88,7 @@ def prep_metadata(version, genome_paths):
     else:
         metadata = m.Metadata(args.gator_db)
 
-    metadata.create_hal_files()
+    metadata.create_hal_files(args.out_dir)
     metadata.make_blast_dbs()
     metadata.verify_metadata()
 
@@ -84,7 +97,7 @@ def prep_metadata(version, genome_paths):
     if args.verify_db == False:
         metadata.version = version
         metadata.genome_paths = genome_paths
-        file = open(args.pickle, 'wb')
+        file = open(os.path.join(args.out_dir, args.pickle), 'wb')
         pickle.dump(metadata, file)
         file.close()
 
@@ -92,7 +105,7 @@ def prep_metadata(version, genome_paths):
 
 def annotate(genome):
 
-    file = open(args.pickle, 'rb')
+    file = open(os.path.join(args.out_dir, args.pickle), 'rb')
     metadata = pickle.load(file)
     file.close()
 
@@ -113,8 +126,16 @@ def annotate(genome):
 
         # raw results are dicts with term as key, and list of objects as values
         if db['METHOD'] == 'kofam':
-            hits = kegg.run_kofam(genome.file_path, db['hal_path'], os.path.join(
-                db['DB_PATH'], 'ko_list'), echo=False)
+
+            # if utilities.check_executable("exec_annotation"):
+            #     print("exec_annotation found!")
+
+            hits = kegg.run_kofam(faa_path = genome.file_path, 
+                                  hal_path = db['hal_path'], 
+                                  temp_dir = os.path.join(args.out_dir, genome.id + "_KO"),
+                                  ko_list = os.path.join(db['DB_PATH'], 'ko_list'), 
+                                  echo = False)
+            
             genome.raw_results[db['DB_NAME']] = kegg.parse_kofam_hits(hits)
 
         elif db['METHOD'] == 'blastp':
@@ -216,7 +237,8 @@ def annotate(genome):
 
                             details = pd.concat([details, results.to_frame().T], ignore_index=True)
 
-    details.to_csv(f"{genome.short_name}_gator_{args.name}_detail.txt", sep="\t", index=False)
+    details_file = os.path.join(args.out_dir, f"{genome.short_name}_gator_{args.name}_detail.txt")
+    details.to_csv(details_file, sep="\t", index=False)
 
 
     # Score potatoes
@@ -234,16 +256,17 @@ def annotate(genome):
         results = p.score_pathway(genes, genome.short_name)
         pathway_results = pd.concat([pathway_results, results.to_frame().T], ignore_index=True)
 
-    pathway_results.to_csv(f"{genome.short_name}_gator_{args.name}_pathway.txt", sep="\t", index=False)
+    pathway_file = os.path.join(args.out_dir, f"{genome.short_name}_gator_{args.name}_pathway.txt")
+    pathway_results.to_csv(pathway_file, sep="\t", index=False)
 
     # Clean Up
-    genome.remove_temp()
+    #genome.remove_temp()
 
 # MAIN ########################################################################
 
 if __name__ == "__main__":
     
-    version = "v1.5.0"
+    version = "v1.6.0"
 
     print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version}{colors.bcolors.END}')
 
