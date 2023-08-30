@@ -55,6 +55,10 @@ parser.add_argument('--save_raw',
                     action='store_true',
                     help='Save the raw search data to files')
 
+parser.add_argument('--score_as_ratio',
+                    action='store_true',
+                    help='Return KOFAM scores as ratios of the treshold')
+
 parser.add_argument('-n', '--name',
                     help="Name to prepend the output files. Defaults to a timestamp",
                     required=False,
@@ -134,6 +138,7 @@ def annotate(genome):
                                   hal_path = db['hal_path'], 
                                   temp_dir = os.path.join(args.out_dir, genome.id + "_KO"),
                                   ko_list = os.path.join(db['DB_PATH'], 'ko_list'), 
+                                  score_as_ratio = args.score_as_ratio,
                                   echo = False)
             
             genome.raw_results[db['DB_NAME']] = kegg.parse_kofam_hits(hits)
@@ -266,7 +271,7 @@ def annotate(genome):
 
 if __name__ == "__main__":
     
-    version = "v1.6.0"
+    version = "v1.6.1"
 
     print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version}{colors.bcolors.END}')
 
@@ -276,7 +281,9 @@ if __name__ == "__main__":
         metadata.remove_temp_files()
 
     else:
-        
+        if args.score_as_ratio:
+            print(f"{colors.bcolors.YELLOW}WARNING: Gator is running in `score_as_ratio` mode, so all kofam results will be returned. Only kofam scores with a value >= 1 would be considered `passed` with this mode disabled{colors.bcolors.END}")
+    
         # get genomes, extract .faa file from genbank files
         unannotated_genomes = utilities.get_files(
             args.files, args.in_dir, ["faa", "gb", "gbk", "gbff"])
