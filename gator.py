@@ -39,6 +39,11 @@ parser.add_argument('-f', '--files',
                     required=False,
                     default=[])
 
+parser.add_argument('--file_list',
+                    help="File with full paths",
+                    required=False,
+                    default = "default")
+
 parser.add_argument('--verify_db',
                     action='store_true',
                     help='Just check the database')
@@ -265,13 +270,13 @@ def annotate(genome):
     pathway_results.to_csv(pathway_file, sep="\t", index=False)
 
     # Clean Up
-    #genome.remove_temp()
+    genome.remove_temp()
 
 # MAIN ########################################################################
 
 if __name__ == "__main__":
     
-    version = "v1.6.1"
+    version = "v1.6.2"
 
     print(f'{colors.bcolors.GREEN}Genome annotATOR (GATOR) {version}{colors.bcolors.END}')
 
@@ -283,11 +288,18 @@ if __name__ == "__main__":
     else:
         if args.score_as_ratio:
             print(f"{colors.bcolors.YELLOW}WARNING: Gator is running in `score_as_ratio` mode, so all kofam results will be returned. Only kofam scores with a value >= 1 would be considered `passed` with this mode disabled{colors.bcolors.END}")
-    
+
+        if args.file_list != "default":
+            with open(args.file_list) as file:
+                file_list = [line.rstrip() for line in file]
+        else:
+            file_list = args.files
+
         # get genomes, extract .faa file from genbank files
         unannotated_genomes = utilities.get_files(
-            args.files, args.in_dir, ["faa", "gb", "gbk", "gbff"])
-        
+            file_list, args.in_dir, ["faa", "gb", "gbk", "gbff"])
+
+
         metadata = prep_metadata(version, [[o.short_name, o.file_path, o.id] for o in unannotated_genomes]) # gator version and list of genomes for pickle file
 
         # # save raw data
